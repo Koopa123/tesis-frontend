@@ -24,13 +24,14 @@ export default function DashboardLayout() {
     { to: '/dashboard/grabaciones', label: 'Grabaciones', icon: '▣' },
     { to: '/dashboard/historial', label: 'Historial', icon: '◈' },
     { to: '/dashboard/alertas', label: 'Alertas', icon: '⚠' },
-    ...(isAdmin
-      ? [
-          { to: '/dashboard/camaras', label: 'Cámaras IP', icon: '⊕' },
-          { to: '/dashboard/zonas-exclusion', label: 'Zonas de exclusión', icon: '◧' },
-        ]
-      : []),
   ];
+
+  const gestionNavItems: NavItem[] = isAdmin
+    ? [
+        { to: '/dashboard/camaras', label: 'Cámaras IP', icon: '⊕' },
+        { to: '/dashboard/zonas-exclusion', label: 'Zonas de exclusión', icon: '◧' },
+      ]
+    : [];
 
   function handleLogout() {
     logout();
@@ -81,6 +82,28 @@ export default function DashboardLayout() {
             </NavLink>
           );
         })}
+
+        {gestionNavItems.length > 0 && (
+          <>
+            <p className="mt-4 mb-1 px-3 text-[10px] font-semibold text-slate-500 uppercase tracking-widest">
+              Gestión
+            </p>
+            {gestionNavItems.map((item) => (
+              <NavLink
+                key={item.to}
+                to={item.to}
+                end={item.end}
+                className={navLinkClass}
+                onClick={() => setSidebarOpen(false)}
+              >
+                <span className="text-base w-5 text-center shrink-0" aria-hidden="true">
+                  {item.icon}
+                </span>
+                <span className="flex-1">{item.label}</span>
+              </NavLink>
+            ))}
+          </>
+        )}
       </nav>
 
       <div className="px-3 py-4 border-t border-slate-700/60">
