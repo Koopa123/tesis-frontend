@@ -133,7 +133,7 @@ export interface VideoSSEEvent {
 
 export interface Alerta {
   id: number;
-  sesion_id: number;
+  sesion_id: number | null;     // null = reportada por el edge (laptop del local), sin sesión de navegador
   usuario_id: number | null;
   zona_config_id: number | null;
   nivel: 'bajo' | 'medio' | 'alto';
@@ -141,13 +141,31 @@ export interface Alerta {
   atendida: boolean;
   fecha_alerta: string | null;
   fecha_atencion: string | null;
+  camara_id?: number | null;
+  camara_nombre?: string | null;
 }
 
 export interface AlertaSSEEvent {
   tipo: 'alerta';
   id: number;
-  sesion_id: number;
+  sesion_id: number | null;
+  camara_id?: number | null;
+  camara_nombre?: string | null;
   nivel: 'alto';
   personas: number;
   fecha_alerta: string | null;
+}
+
+// ── Edge (laptop en el local) ─────────────────────────────────────────────────
+
+export interface EstadoCamaraEdge {
+  camara_id: number;
+  camara_nombre: string;
+  ubicacion: string;
+  zona_config_id: number | null;
+  personas: number;
+  nivel: 'sin_aglomeracion' | 'bajo' | 'medio' | 'alto';
+  alerta_activa: boolean;
+  tiene_evidencia: boolean;
+  fecha_actualizacion: string | null;
 }

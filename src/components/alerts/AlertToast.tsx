@@ -16,7 +16,10 @@ export default function AlertToast() {
           <div className="flex-1 min-w-0">
             <p className="font-bold text-sm leading-tight">Alerta de aglomeración</p>
             <p className="text-xs text-red-100 mt-1">
-              {latest.personas} persona{latest.personas !== 1 ? 's' : ''} detectadas · Sesión #{latest.sesion_id}
+              {latest.personas} persona{latest.personas !== 1 ? 's' : ''} detectadas ·{' '}
+              {latest.sesion_id !== null
+                ? `Sesión #${latest.sesion_id}`
+                : latest.camara_nombre ?? 'Reporte automático'}
             </p>
             {extras > 0 && (
               <p className="text-xs text-red-200 mt-0.5">

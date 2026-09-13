@@ -145,7 +145,11 @@ function AlertRow({
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2 flex-wrap mb-1.5">
           <span className="text-xs font-bold text-slate-400">
-            Sesión #{alerta.sesion_id}
+            {alerta.sesion_id !== null
+              ? `Sesión #${alerta.sesion_id}`
+              : alerta.camara_nombre
+                ? `📡 ${alerta.camara_nombre}`
+                : '📡 Reporte automático'}
           </span>
           <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-red-100 text-red-700 border border-red-200">
             ALTO

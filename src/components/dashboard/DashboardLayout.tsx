@@ -24,6 +24,7 @@ export default function DashboardLayout() {
     { to: '/dashboard/grabaciones', label: 'Grabaciones', icon: '▣' },
     { to: '/dashboard/historial', label: 'Historial', icon: '◈' },
     { to: '/dashboard/alertas', label: 'Alertas', icon: '⚠' },
+    { to: '/dashboard/estado-edge', label: 'Estado en vivo', icon: '📡' },
   ];
 
   const gestionNavItems: NavItem[] = isAdmin

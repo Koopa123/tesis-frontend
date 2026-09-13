@@ -19,6 +19,7 @@ import CamarasPage from './pages/dashboard/CamarasPage';
 import ZonasExclusionPage from './pages/dashboard/ZonasExclusionPage';
 import HistorialPage from './pages/dashboard/HistorialPage';
 import AlertasPage from './pages/dashboard/AlertasPage';
+import EstadoEdgePage from './pages/dashboard/EstadoEdgePage';
 
 function LandingPage() {
   return (
@@ -74,6 +75,7 @@ export default function App() {
               />
               <Route path="historial" element={<HistorialPage />} />
               <Route path="alertas" element={<AlertasPage />} />
+              <Route path="estado-edge" element={<EstadoEdgePage />} />
             </Route>
           </Routes>
         </AlertProvider>
