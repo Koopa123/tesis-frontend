@@ -21,7 +21,6 @@ export default function DashboardLayout() {
     { to: '/dashboard', label: 'Inicio', icon: '◉', end: true },
     { to: '/dashboard/monitoreo', label: 'Monitoreo', icon: '▶' },
     { to: '/dashboard/multicamara', label: 'Multi-cámara', icon: '⊞' },
-    { to: '/dashboard/grabaciones', label: 'Grabaciones', icon: '▣' },
     { to: '/dashboard/historial', label: 'Historial', icon: '◈' },
     { to: '/dashboard/alertas', label: 'Alertas', icon: '⚠' },
     { to: '/dashboard/estado-edge', label: 'Estado en vivo', icon: '📡' },

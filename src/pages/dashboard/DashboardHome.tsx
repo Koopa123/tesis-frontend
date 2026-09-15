@@ -29,13 +29,6 @@ const OPERACION_LINKS: QuickLink[] = [
     accent: 'border-blue-200 hover:border-blue-400 hover:shadow-blue-50',
   },
   {
-    to: '/dashboard/grabaciones',
-    icon: '▣',
-    title: 'Grabaciones',
-    description: 'Sube y gestiona videos previos para usarlos en sesiones de monitoreo.',
-    accent: 'border-slate-200 hover:border-slate-400 hover:shadow-slate-50',
-  },
-  {
     to: '/dashboard/historial',
     icon: '◈',
     title: 'Historial',

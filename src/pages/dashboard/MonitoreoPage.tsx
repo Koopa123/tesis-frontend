@@ -11,7 +11,7 @@ import type {
 } from '../../types/api';
 import type { ExclusionRect, ExclusionZoneConfig } from '../../types/zones';
 import { getVideoSources, selectVideoSource } from '../../services/videoSourceService';
-import { getRecordings } from '../../services/recordingService';
+import { getRecordings, uploadRecording, deleteRecording } from '../../services/recordingService';
 import { startMonitoring, stopMonitoring } from '../../services/monitoringService';
 import { getExclusionZones } from '../../services/exclusionZoneService';
 import { analyzeFrame, streamVideoAnalisis } from '../../services/analisisService';
@@ -105,6 +105,12 @@ export default function MonitoreoPage() {
   const [recordings, setRecordings] = useState<Recording[]>([]);
   const [zones, setZones] = useState<ExclusionZoneConfig[]>([]);
 
+  // ── Subir grabación (fusionado desde la antigua página "Grabaciones") ────
+  const [uploadingRecording, setUploadingRecording] = useState(false);
+  const [recordingUploadError, setRecordingUploadError] = useState<string | null>(null);
+  const [deletingRecordingId, setDeletingRecordingId] = useState<number | null>(null);
+  const recordingFileInputRef = useRef<HTMLInputElement>(null);
+
   // ── Selección ────────────────────────────────────────────────────────────
   const [selectedType, setSelectedType] = useState<VideoSourceType | null>(null);
   const [selectedCameraId, setSelectedCameraId] = useState<number | null>(null);
@@ -184,6 +190,44 @@ export default function MonitoreoPage() {
   }, []);
 
   useEffect(() => { void loadData(); }, [loadData]);
+
+  const RECORDING_EXTS = ['.mp4', '.avi', '.mov', '.mkv'];
+
+  async function handleUploadRecording(file: File) {
+    const ext = '.' + (file.name.split('.').pop()?.toLowerCase() ?? '');
+    if (!RECORDING_EXTS.includes(ext)) {
+      setRecordingUploadError(`Formato no permitido. Usa: ${RECORDING_EXTS.join(', ')}`);
+      return;
+    }
+    setRecordingUploadError(null);
+    setUploadingRecording(true);
+    try {
+      const nueva = await uploadRecording(file);
+      if (recordingFileInputRef.current) recordingFileInputRef.current.value = '';
+      setRecordings(await getRecordings());
+      setSelectedRecordingId(nueva.id);
+      flash('Grabación subida correctamente.');
+    } catch (e) {
+      setRecordingUploadError(e instanceof Error ? e.message : 'Error al subir grabación.');
+    } finally {
+      setUploadingRecording(false);
+    }
+  }
+
+  async function handleDeleteRecording(rec: Recording) {
+    if (!confirm(`¿Eliminar la grabación "${rec.nombre_archivo}"? Esta acción no se puede deshacer.`)) return;
+    setDeletingRecordingId(rec.id);
+    try {
+      await deleteRecording(rec.id);
+      if (selectedRecordingId === rec.id) setSelectedRecordingId(null);
+      setRecordings(await getRecordings());
+      flash('Grabación eliminada.');
+    } catch (e) {
+      setRecordingUploadError(e instanceof Error ? e.message : 'Error al eliminar grabación.');
+    } finally {
+      setDeletingRecordingId(null);
+    }
+  }
 
   // ── Mantener refs sincronizados con el estado (evita stale closures) ────
   // Esto garantiza que el setInterval siempre use los valores más recientes.
@@ -880,12 +924,54 @@ export default function MonitoreoPage() {
                     Grabación
                   </label>
                   {recordings.length === 0
-                    ? <p className="text-sm text-slate-400 italic">No hay grabaciones. Ve a Grabaciones para subir una.</p>
-                    : <select value={selectedRecordingId ?? ''} onChange={(e) => setSelectedRecordingId(Number(e.target.value) || null)}
-                        className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
-                        <option value="">Selecciona una grabación…</option>
-                        {recordings.map((r) => <option key={r.id} value={r.id}>{r.nombre_archivo}</option>)}
-                      </select>}
+                    ? <p className="text-sm text-slate-400 italic mb-3">No hay grabaciones todavía — sube una abajo.</p>
+                    : (
+                      <div className="flex gap-2 mb-3">
+                        <select value={selectedRecordingId ?? ''} onChange={(e) => setSelectedRecordingId(Number(e.target.value) || null)}
+                          className="flex-1 min-w-0 px-3 py-2 rounded-lg border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+                          <option value="">Selecciona una grabación…</option>
+                          {recordings.map((r) => <option key={r.id} value={r.id}>{r.nombre_archivo}</option>)}
+                        </select>
+                        {selectedRecordingId != null && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const rec = recordings.find((r) => r.id === selectedRecordingId);
+                              if (rec) void handleDeleteRecording(rec);
+                            }}
+                            disabled={deletingRecordingId === selectedRecordingId}
+                            className="shrink-0 px-3 py-2 rounded-lg text-xs font-semibold border border-red-200 text-red-600 hover:bg-red-50 transition-colors disabled:opacity-50"
+                          >
+                            {deletingRecordingId === selectedRecordingId ? '…' : 'Eliminar'}
+                          </button>
+                        )}
+                      </div>
+                    )}
+
+                  {/* Subir un video nuevo, sin salir de Monitoreo */}
+                  <input
+                    ref={recordingFileInputRef}
+                    type="file"
+                    accept={RECORDING_EXTS.join(',')}
+                    className="hidden"
+                    id="monitoreo-recording-upload"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (file) void handleUploadRecording(file);
+                    }}
+                  />
+                  <label
+                    htmlFor="monitoreo-recording-upload"
+                    className={`inline-block cursor-pointer px-3 py-1.5 rounded-lg border border-slate-200 text-xs font-medium text-slate-600 hover:bg-slate-50 transition-colors ${uploadingRecording ? 'opacity-50 pointer-events-none' : ''}`}
+                  >
+                    {uploadingRecording ? 'Subiendo…' : '+ Subir video nuevo'}
+                  </label>
+                  <span className="ml-2 text-[10px] text-slate-400">
+                    Formatos: {RECORDING_EXTS.join(', ')}
+                  </span>
+                  {recordingUploadError && (
+                    <p className="mt-2 text-xs text-red-600">{recordingUploadError}</p>
+                  )}
                 </div>
               )}
             </div>

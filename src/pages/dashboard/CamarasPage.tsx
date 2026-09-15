@@ -3,6 +3,7 @@ import type { CameraIP } from '../../types/api';
 import {
   getCameras,
   createCamera,
+  updateCamera,
   updateCameraStatus,
   updateCameraZona,
   deleteCamera,
@@ -45,6 +46,7 @@ export default function CamarasPage() {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
+  const [editingId, setEditingId] = useState<number | null>(null);
   const [form, setForm] = useState<FormState>(EMPTY);
   const [formError, setFormError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -98,28 +100,72 @@ export default function CamarasPage() {
     setFormError(null);
     setSubmitting(true);
     try {
-      await createCamera({
-        nombre: form.nombre.trim(),
-        direccion_ip: form.direccion_ip.trim(),
-        ubicacion: form.ubicacion.trim(),
-        descripcion: form.descripcion.trim() || undefined,
-        activa: form.activa,
-        rtsp_usuario: form.rtsp_usuario.trim() || 'admin',
-        rtsp_password: form.rtsp_password.trim() || undefined,
-        rtsp_puerto: parseInt(form.rtsp_puerto) || 554,
-        rtsp_canal: parseInt(form.rtsp_canal) || 1,
-        rtsp_subtipo: parseInt(form.rtsp_subtipo) || 1,
-        zona_exclusion_id: form.zona_exclusion_id ? Number(form.zona_exclusion_id) : null,
-      });
+      if (editingId !== null) {
+        // Edición: solo se manda la contraseña si el usuario escribió algo
+        // nuevo — en blanco significa "no cambiarla" (el backend la deja igual).
+        await updateCamera(editingId, {
+          nombre: form.nombre.trim(),
+          direccion_ip: form.direccion_ip.trim(),
+          ubicacion: form.ubicacion.trim(),
+          descripcion: form.descripcion.trim(),
+          rtsp_usuario: form.rtsp_usuario.trim() || 'admin',
+          ...(form.rtsp_password.trim() ? { rtsp_password: form.rtsp_password.trim() } : {}),
+          rtsp_puerto: parseInt(form.rtsp_puerto) || 554,
+          rtsp_canal: parseInt(form.rtsp_canal) || 1,
+          rtsp_subtipo: parseInt(form.rtsp_subtipo) || 1,
+        });
+        flash('Cámara actualizada correctamente.');
+      } else {
+        await createCamera({
+          nombre: form.nombre.trim(),
+          direccion_ip: form.direccion_ip.trim(),
+          ubicacion: form.ubicacion.trim(),
+          descripcion: form.descripcion.trim() || undefined,
+          activa: form.activa,
+          rtsp_usuario: form.rtsp_usuario.trim() || 'admin',
+          rtsp_password: form.rtsp_password.trim() || undefined,
+          rtsp_puerto: parseInt(form.rtsp_puerto) || 554,
+          rtsp_canal: parseInt(form.rtsp_canal) || 1,
+          rtsp_subtipo: parseInt(form.rtsp_subtipo) || 1,
+          zona_exclusion_id: form.zona_exclusion_id ? Number(form.zona_exclusion_id) : null,
+        });
+        flash('Cámara registrada correctamente.');
+      }
       setForm(EMPTY);
       setShowForm(false);
-      flash('Cámara registrada correctamente.');
+      setEditingId(null);
       await load();
     } catch (e) {
-      setFormError(e instanceof Error ? e.message : 'Error al registrar cámara.');
+      setFormError(e instanceof Error ? e.message : 'Error al guardar la cámara.');
     } finally {
       setSubmitting(false);
     }
+  }
+
+  function handleEditClick(cam: CameraIP) {
+    setEditingId(cam.id);
+    setForm({
+      nombre: cam.nombre,
+      direccion_ip: cam.direccion_ip,
+      ubicacion: cam.ubicacion,
+      descripcion: cam.descripcion ?? '',
+      activa: cam.activa,
+      rtsp_usuario: cam.rtsp_usuario,
+      rtsp_password: '',
+      rtsp_puerto: String(cam.rtsp_puerto),
+      rtsp_canal: String(cam.rtsp_canal),
+      rtsp_subtipo: String(cam.rtsp_subtipo),
+      zona_exclusion_id: cam.zona_exclusion_id != null ? String(cam.zona_exclusion_id) : '',
+    });
+    setFormError(null);
+    setShowForm(true);
+  }
+
+  function handleCancelForm() {
+    setShowForm(false);
+    setEditingId(null);
+    setForm(EMPTY);
+    setFormError(null);
   }
 
   async function handleToggle(cam: CameraIP) {
@@ -161,7 +207,9 @@ export default function CamarasPage() {
           <p className="text-slate-500 text-sm mt-1">Solo administrador</p>
         </div>
         <button
-          onClick={() => { setShowForm((v) => !v); setFormError(null); }}
+          onClick={() => {
+            if (showForm) { handleCancelForm(); } else { setEditingId(null); setForm(EMPTY); setShowForm(true); setFormError(null); }
+          }}
           className="px-4 py-2 rounded-lg bg-[#2563EB] hover:bg-blue-700 text-white text-sm font-semibold transition-colors"
         >
           {showForm ? 'Cancelar' : '+ Nueva cámara'}
@@ -182,7 +230,9 @@ export default function CamarasPage() {
 
       {showForm && (
         <div className="mb-6 bg-white rounded-xl border border-slate-200 shadow-sm p-6">
-          <h2 className="font-semibold text-[#0F172A] mb-4 text-base">Registrar nueva cámara</h2>
+          <h2 className="font-semibold text-[#0F172A] mb-4 text-base">
+            {editingId !== null ? 'Editar cámara' : 'Registrar nueva cámara'}
+          </h2>
           <form onSubmit={handleSubmit} className="space-y-4">
 
             {/* Datos generales */}
@@ -235,10 +285,13 @@ export default function CamarasPage() {
                     type="password"
                     value={form.rtsp_password}
                     onChange={(e) => setField('rtsp_password', e.target.value)}
-                    placeholder="Contraseña de la cámara"
+                    placeholder={editingId !== null ? 'Dejar en blanco para no cambiarla' : 'Contraseña de la cámara'}
                     autoComplete="new-password"
                     className="px-3 py-2 rounded-lg border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                   />
+                  {editingId !== null && (
+                    <p className="text-[10px] text-slate-400">En blanco = mantener la contraseña actual.</p>
+                  )}
                 </div>
                 <div className="flex flex-col gap-1">
                   <label htmlFor="rtsp_puerto" className="text-xs font-semibold text-slate-600 uppercase tracking-wide">Puerto</label>
@@ -282,38 +335,43 @@ export default function CamarasPage() {
               </div>
             </div>
 
-            <div className="flex flex-col gap-1">
-              <label htmlFor="zona_exclusion_id" className="text-xs font-semibold text-slate-600 uppercase tracking-wide">
-                Zona de exclusión por defecto
-              </label>
-              <select
-                id="zona_exclusion_id"
-                value={form.zona_exclusion_id}
-                onChange={(e) => setField('zona_exclusion_id', e.target.value)}
-                className="px-3 py-2 rounded-lg border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
-              >
-                <option value="">Sin zona (umbrales por defecto)</option>
-                {zones.map((z) => (
-                  <option key={z.id} value={z.id}>{z.nombre}</option>
-                ))}
-              </select>
-              <p className="text-[10px] text-slate-400">
-                Se aplica automáticamente en la vista multicámara, donde no hay selector manual por sesión.
-              </p>
-            </div>
+            {editingId === null && (
+              <div className="flex flex-col gap-1">
+                <label htmlFor="zona_exclusion_id" className="text-xs font-semibold text-slate-600 uppercase tracking-wide">
+                  Zona de exclusión por defecto
+                </label>
+                <select
+                  id="zona_exclusion_id"
+                  value={form.zona_exclusion_id}
+                  onChange={(e) => setField('zona_exclusion_id', e.target.value)}
+                  className="px-3 py-2 rounded-lg border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                >
+                  <option value="">Sin zona (umbrales por defecto)</option>
+                  {zones.map((z) => (
+                    <option key={z.id} value={z.id}>{z.nombre}</option>
+                  ))}
+                </select>
+                <p className="text-[10px] text-slate-400">
+                  Se aplica automáticamente en la vista multicámara, donde no hay selector manual por sesión.
+                  Para una cámara existente, cambia la zona desde el selector en su tarjeta de abajo.
+                </p>
+              </div>
+            )}
 
-            <div className="flex items-center gap-2">
-              <input
-                type="checkbox"
-                id="activa"
-                checked={form.activa}
-                onChange={(e) => setField('activa', e.target.checked)}
-                className="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
-              />
-              <label htmlFor="activa" className="text-sm text-slate-600 select-none">
-                Activa al registrar
-              </label>
-            </div>
+            {editingId === null && (
+              <div className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  id="activa"
+                  checked={form.activa}
+                  onChange={(e) => setField('activa', e.target.checked)}
+                  className="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                />
+                <label htmlFor="activa" className="text-sm text-slate-600 select-none">
+                  Activa al registrar
+                </label>
+              </div>
+            )}
 
             {formError && (
               <div className="px-4 py-3 rounded-lg bg-red-50 border border-red-200 text-sm text-red-700">
@@ -327,11 +385,13 @@ export default function CamarasPage() {
                 disabled={submitting}
                 className="px-5 py-2 rounded-lg bg-[#2563EB] hover:bg-blue-700 text-white text-sm font-semibold transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
               >
-                {submitting ? 'Registrando...' : 'Registrar cámara'}
+                {submitting
+                  ? (editingId !== null ? 'Guardando...' : 'Registrando...')
+                  : (editingId !== null ? 'Guardar cambios' : 'Registrar cámara')}
               </button>
               <button
                 type="button"
-                onClick={() => { setShowForm(false); setForm(EMPTY); setFormError(null); }}
+                onClick={handleCancelForm}
                 className="px-5 py-2 rounded-lg border border-slate-200 text-sm text-slate-600 hover:bg-slate-50 transition-colors"
               >
                 Cancelar
@@ -408,6 +468,12 @@ export default function CamarasPage() {
                   </div>
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
+                  <button
+                    onClick={() => handleEditClick(cam)}
+                    className="px-3 py-1.5 rounded-lg text-xs font-semibold border border-slate-200 text-slate-600 hover:bg-slate-50 transition-colors"
+                  >
+                    Editar
+                  </button>
                   <button
                     onClick={() => handleToggle(cam)}
                     disabled={togglingId === cam.id}

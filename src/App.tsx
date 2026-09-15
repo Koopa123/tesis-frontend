@@ -14,7 +14,6 @@ import DashboardLayout from './components/dashboard/DashboardLayout';
 import DashboardHome from './pages/dashboard/DashboardHome';
 import MonitoreoPage from './pages/dashboard/MonitoreoPage';
 import MulticamaraPage from './pages/dashboard/MulticamaraPage';
-import GrabacionesPage from './pages/dashboard/GrabacionesPage';
 import CamarasPage from './pages/dashboard/CamarasPage';
 import ZonasExclusionPage from './pages/dashboard/ZonasExclusionPage';
 import HistorialPage from './pages/dashboard/HistorialPage';
@@ -56,7 +55,6 @@ export default function App() {
               <Route index element={<DashboardHome />} />
               <Route path="monitoreo" element={<MonitoreoPage />} />
               <Route path="multicamara" element={<MulticamaraPage />} />
-              <Route path="grabaciones" element={<GrabacionesPage />} />
               <Route
                 path="camaras"
                 element={
