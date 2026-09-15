@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import type { CameraIP, NivelAglomeracion } from '../../types/api';
 import { getCameras } from '../../services/cameraService';
-import { startMonitoring, stopMonitoring } from '../../services/monitoringService';
+import { startMonitoring } from '../../services/monitoringService';
 
 const API_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:8000';
 
@@ -154,17 +154,21 @@ function CameraTile({ camera, onHide }: { camera: CameraIP; onHide: () => void }
       });
   }, [camera.id]);
 
-  // Iniciar sesión de monitoreo al montar; detenerla al desmontar/ocultar.
+  // Iniciar sesión de monitoreo al montar. Al desmontar/ocultar NO se
+  // detiene la sesión: una sesión de cámara IP es compartida (puede haber
+  // varios usuarios viéndola a la vez — admin y vigilantes), así que salir
+  // de esta vista solo debe cerrar la conexión de ESTE navegador, no apagar
+  // la cámara para los demás. El backend limpia sesiones huérfanas solo al
+  // reiniciar (ver app/main.py), y "Monitoreo" (una sola cámara) sigue
+  // teniendo su propio botón explícito de "Detener" para cuando de verdad
+  // se quiere terminar el monitoreo y guardar el resultado.
   useEffect(() => {
     mountedRef.current = true;
-    const sessionPromise = connectSession();
+    connectSession();
     return () => {
       mountedRef.current = false;
       clearTimers();
       sseAbortRef.current?.abort();
-      sessionPromise.then((s) => {
-        if (s?.id != null) stopMonitoring(s.id).catch(() => {});
-      });
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [connectSession, clearTimers]);
