@@ -6,6 +6,8 @@ import {
   updateExclusionZone,
   deleteExclusionZone,
 } from '../../services/exclusionZoneService';
+import { getCameras, getCameraPhoto } from '../../services/cameraService';
+import type { CameraIP } from '../../types/api';
 import ZoneEditor from '../../components/zones/ZoneEditor';
 
 const API_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:8000';
@@ -13,7 +15,8 @@ const ALLOWED_IMG_EXTS = ['.jpg', '.jpeg', '.png', '.webp'];
 const ALLOWED_VID_EXTS = ['.mp4', '.avi', '.mov', '.mkv', '.webm'];
 
 type Mode = 'list' | 'create' | 'edit';
-type FrameSource = 'none' | 'image' | 'video';
+type FrameSource = 'none' | 'image' | 'video' | 'camera';
+const CAMERA_PHOTO_NAME = 'foto_camara.jpg';
 
 function backendFrameUrl(path: string): string {
   return `${API_URL}/${path.replace(/\\/g, '/')}`;
@@ -53,6 +56,11 @@ export default function ZonasExclusionPage() {
   const [videoDuration, setVideoDuration] = useState(0);
   const [currentTime, setCurrentTime] = useState(0);
   const [capturing, setCapturing] = useState(false);
+
+  // Live camera photo state
+  const [cameras, setCameras] = useState<CameraIP[]>([]);
+  const [cameraId, setCameraId] = useState<number | null>(null);
+  const [takingPhoto, setTakingPhoto] = useState(false);
 
   // UI state
   const [loadingList, setLoadingList] = useState(true);
@@ -234,6 +242,37 @@ export default function ZonasExclusionPage() {
     }, 'image/jpeg', 0.92);
   }
 
+  // ── Live camera photo ───────────────────────────────────────────────────────
+  async function openCameraPicker() {
+    setFrameSource('camera');
+    setFileError(null);
+    clearVideoState();
+    try {
+      const activas = (await getCameras()).filter((c) => c.activa);
+      setCameras(activas);
+      setCameraId((prev) => prev ?? activas[0]?.id ?? null);
+    } catch (e) {
+      setFileError(e instanceof Error ? e.message : 'No se pudieron cargar las cámaras.');
+    }
+  }
+
+  async function takeCameraPhoto() {
+    if (cameraId === null) return;
+    setTakingPhoto(true);
+    setFileError(null);
+    try {
+      const blob = await getCameraPhoto(cameraId);
+      const file = new File([blob], CAMERA_PHOTO_NAME, { type: 'image/jpeg' });
+      setSelectedFile(file);
+      setBlobImage(file);
+      setRects([]);
+    } catch (e) {
+      setFileError(e instanceof Error ? e.message : 'No se pudo tomar la foto de la cámara.');
+    } finally {
+      setTakingPhoto(false);
+    }
+  }
+
   // ── Save ────────────────────────────────────────────────────────────────────
   async function handleSave() {
     setError(null);
@@ -395,8 +434,9 @@ export default function ZonasExclusionPage() {
 
   // Determine what to show in the frame section
   const showVideoPicker = frameSource === 'video' && videoObjectUrl && !imageUrl;
+  const showCameraPicker = frameSource === 'camera' && !imageUrl;
   const showZoneEditor = imageUrl !== null;
-  const showSourcePicker = !showVideoPicker && !showZoneEditor;
+  const showSourcePicker = !showVideoPicker && !showCameraPicker && !showZoneEditor;
 
   return (
     <div className="max-w-3xl mx-auto">
@@ -504,7 +544,21 @@ export default function ZonasExclusionPage() {
 
           {/* ── A: Source picker ── */}
           {showSourcePicker && (
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              {/* Option 0 — Live photo from an IP camera */}
+              <button
+                onClick={() => { void openCameraPicker(); }}
+                className="flex flex-col items-center gap-3 p-6 rounded-xl border-2 border-dashed border-slate-200 hover:border-emerald-300 hover:bg-emerald-50/30 transition-colors text-center"
+              >
+                <span className="text-4xl" aria-hidden="true">📷</span>
+                <div>
+                  <p className="text-sm font-semibold text-[#0F172A]">Tomar foto de una cámara</p>
+                  <p className="text-xs text-slate-400 mt-0.5">
+                    Lo que la cámara ve ahora mismo. Solo desde el equipo del local.
+                  </p>
+                </div>
+              </button>
+
               {/* Option 1 — Upload image */}
               <button
                 onClick={() => imgFileInputRef.current?.click()}
@@ -589,6 +643,43 @@ export default function ZonasExclusionPage() {
             </div>
           )}
 
+          {/* ── B2: Live camera photo picker ── */}
+          {showCameraPicker && (
+            <div className="flex flex-col gap-4">
+              {cameras.length === 0 && !fileError ? (
+                <p className="text-sm text-slate-500">No hay cámaras activas registradas.</p>
+              ) : (
+                <label className="flex flex-col gap-1.5">
+                  <span className="text-xs text-slate-500">Cámara</span>
+                  <select
+                    value={cameraId ?? ''}
+                    onChange={(e) => setCameraId(Number(e.target.value))}
+                    className="w-full px-3 py-2.5 rounded-lg border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  >
+                    {cameras.map((c) => (
+                      <option key={c.id} value={c.id}>{c.nombre} — {c.direccion_ip}</option>
+                    ))}
+                  </select>
+                </label>
+              )}
+              <div className="flex gap-3">
+                <button
+                  onClick={() => { void takeCameraPhoto(); }}
+                  disabled={takingPhoto || cameraId === null}
+                  className="flex-1 py-2.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+                >
+                  {takingPhoto ? 'Tomando foto… (puede tardar unos segundos)' : '📷 Tomar foto'}
+                </button>
+                <button
+                  onClick={() => { setFrameSource('none'); setFileError(null); }}
+                  className="px-4 py-2.5 rounded-lg border border-slate-200 text-sm text-slate-500 hover:bg-slate-50 transition-colors"
+                >
+                  Cancelar
+                </button>
+              </div>
+            </div>
+          )}
+
           {/* ── C: Zone editor (image loaded) ── */}
           {showZoneEditor && (
             <>
@@ -598,7 +689,9 @@ export default function ZonasExclusionPage() {
                   <span>
                     {selectedFile.name === 'frame_capturado.jpg'
                       ? 'Frame extraído del video listo para usar'
-                      : `Imagen lista: ${selectedFile.name}`}
+                      : selectedFile.name === CAMERA_PHOTO_NAME
+                        ? `Foto de ${cameras.find((c) => c.id === cameraId)?.nombre ?? 'la cámara'} lista para usar`
+                        : `Imagen lista: ${selectedFile.name}`}
                   </span>
                 </div>
               )}

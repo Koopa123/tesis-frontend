@@ -1,5 +1,5 @@
 import type { CameraIP } from '../types/api';
-import { apiFetch } from './apiClient';
+import { apiFetch, apiFetchBlob } from './apiClient';
 
 export interface CreateCameraPayload {
   nombre: string;
@@ -52,3 +52,8 @@ export const updateCameraZona = (id: number, zona_exclusion_id: number | null): 
 
 export const deleteCamera = (id: number): Promise<void> =>
   apiFetch(`/api/camaras/${id}`, { method: 'DELETE' });
+
+// Fotograma en vivo, sin detecciones dibujadas. Solo responde donde el
+// backend está en la misma red que las cámaras (la laptop del local).
+export const getCameraPhoto = (id: number): Promise<Blob> =>
+  apiFetchBlob(`/api/camaras/${id}/foto`);

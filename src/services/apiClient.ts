@@ -11,6 +11,18 @@ export class ApiError extends Error {
 }
 
 export async function apiFetch<T>(path: string, options: RequestInit = {}): Promise<T> {
+  const res = await apiRequest(path, options);
+  if (res.status === 204) return undefined as T;
+  return res.json() as Promise<T>;
+}
+
+/** Igual que apiFetch, pero para respuestas binarias (imágenes). */
+export async function apiFetchBlob(path: string, options: RequestInit = {}): Promise<Blob> {
+  const res = await apiRequest(path, options);
+  return res.blob();
+}
+
+async function apiRequest(path: string, options: RequestInit): Promise<Response> {
   const token = localStorage.getItem('token');
   const isFormData = options.body instanceof FormData;
 
@@ -43,6 +55,5 @@ export async function apiFetch<T>(path: string, options: RequestInit = {}): Prom
     throw new ApiError(detail, res.status);
   }
 
-  if (res.status === 204) return undefined as T;
-  return res.json() as Promise<T>;
+  return res;
 }
