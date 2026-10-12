@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import AuthLayout from '../components/auth/AuthLayout';
 import AuthCard from '../components/auth/AuthCard';
 import AuthInput from '../components/auth/AuthInput';
@@ -50,7 +50,6 @@ function validate(
 
 export default function RegisterPage() {
   const { register } = useAuth();
-  const navigate = useNavigate();
 
   const [nombre, setNombre] = useState('');
   const [email, setEmail] = useState('');
@@ -58,6 +57,7 @@ export default function RegisterPage() {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [errors, setErrors] = useState<FormErrors>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [registrado, setRegistrado] = useState(false);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -70,7 +70,7 @@ export default function RegisterPage() {
     setIsSubmitting(true);
     try {
       await register({ nombre: nombre.trim(), email: email.trim(), password });
-      navigate('/dashboard');
+      setRegistrado(true);
     } catch (err) {
       setErrors({
         general: err instanceof Error ? err.message : 'Error al crear la cuenta.',
@@ -111,6 +111,17 @@ export default function RegisterPage() {
           </div>
         )}
 
+        {registrado && (
+          <div
+            role="status"
+            className="mb-4 px-4 py-3 rounded-lg bg-green-50 border border-green-200 text-sm text-green-800"
+          >
+            Cuenta creada. Un administrador debe activarla antes de que puedas
+            iniciar sesión.
+          </div>
+        )}
+
+        {!registrado && (
         <form onSubmit={handleSubmit} noValidate className="flex flex-col gap-4">
           <AuthInput
             id="nombre"
@@ -170,6 +181,7 @@ export default function RegisterPage() {
             {isSubmitting ? 'Creando cuenta...' : 'Crear cuenta'}
           </button>
         </form>
+        )}
 
         <p className="mt-6 text-center text-sm text-slate-600">
           ¿Ya tienes cuenta?{' '}

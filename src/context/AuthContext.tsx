@@ -85,10 +85,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const register = useCallback(
     async (req: RegisterRequest) => {
-      const { token: newToken, usuario } = await registerRequest(req);
-      saveSession(newToken, usuario);
+      // La cuenta nueva queda pendiente de activación: no se abre sesión.
+      await registerRequest(req);
     },
-    [saveSession]
+    []
   );
 
   const logout = useCallback(() => {

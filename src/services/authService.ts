@@ -14,6 +14,7 @@ export async function loginRequest(req: LoginRequest): Promise<AuthResponse> {
     body: JSON.stringify(req),
   });
   if (res.status === 401) throw new Error('Credenciales incorrectas.');
+  if (res.status === 429) throw new Error('Demasiados intentos fallidos. Espera un minuto e inténtalo de nuevo.');
   if (!res.ok) throw new Error('Error al iniciar sesión. Intenta de nuevo.');
   return res.json() as Promise<AuthResponse>;
 }
@@ -21,11 +22,12 @@ export async function loginRequest(req: LoginRequest): Promise<AuthResponse> {
 // ─────────────────────────────────────────────
 // POST /auth/registro
 // Payload: { nombre, email, password }
-// Response: { token, usuario }
-// El backend asigna rol "vigilante" por defecto.
+// Response: { mensaje }
+// El backend asigna rol "vigilante" y deja la cuenta desactivada
+// hasta que un administrador la active (no devuelve token).
 // El frontend nunca envía ni permite elegir rol.
 // ─────────────────────────────────────────────
-export async function registerRequest(req: RegisterRequest): Promise<AuthResponse> {
+export async function registerRequest(req: RegisterRequest): Promise<void> {
   const res = await fetch(`${API_URL}/auth/registro`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -33,7 +35,6 @@ export async function registerRequest(req: RegisterRequest): Promise<AuthRespons
   });
   if (res.status === 409) throw new Error('Ya existe una cuenta con ese correo.');
   if (!res.ok) throw new Error('Error al crear la cuenta. Intenta de nuevo.');
-  return res.json() as Promise<AuthResponse>;
 }
 
 // ─────────────────────────────────────────────
