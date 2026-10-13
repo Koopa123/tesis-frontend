@@ -30,6 +30,7 @@ export default function DashboardLayout() {
     ? [
         { to: '/dashboard/camaras', label: 'Cámaras IP', icon: '⊕' },
         { to: '/dashboard/zonas-exclusion', label: 'Zonas de exclusión', icon: '◧' },
+        { to: '/dashboard/usuarios', label: 'Usuarios', icon: '◎' },
       ]
     : [];
 

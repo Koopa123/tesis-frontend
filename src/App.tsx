@@ -19,6 +19,7 @@ import ZonasExclusionPage from './pages/dashboard/ZonasExclusionPage';
 import HistorialPage from './pages/dashboard/HistorialPage';
 import AlertasPage from './pages/dashboard/AlertasPage';
 import EstadoEdgePage from './pages/dashboard/EstadoEdgePage';
+import UsuariosPage from './pages/dashboard/UsuariosPage';
 
 function LandingPage() {
   return (
@@ -68,6 +69,14 @@ export default function App() {
                 element={
                   <ProtectedRoute requireAdmin>
                     <ZonasExclusionPage />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="usuarios"
+                element={
+                  <ProtectedRoute requireAdmin>
+                    <UsuariosPage />
                   </ProtectedRoute>
                 }
               />
