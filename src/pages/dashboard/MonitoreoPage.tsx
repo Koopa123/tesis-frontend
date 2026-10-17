@@ -1,7 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import type {
   VideoSourceType,
-  VideoSourcesResponse,
   MonitoringSession,
   Recording,
   DetectionBox,
@@ -9,10 +8,9 @@ import type {
   VideoSSEEvent,
 } from '../../types/api';
 import type { ExclusionRect, ExclusionZoneConfig } from '../../types/zones';
-import { getVideoSources, selectVideoSource } from '../../services/videoSourceService';
+import { selectVideoSource } from '../../services/videoSourceService';
 import { getRecordings, uploadRecording, deleteRecording } from '../../services/recordingService';
 import { startMonitoring, stopMonitoring } from '../../services/monitoringService';
-import { ApiError } from '../../services/apiClient';
 import { getExclusionZones } from '../../services/exclusionZoneService';
 import { streamVideoAnalisis } from '../../services/analisisService';
 
@@ -28,16 +26,10 @@ const NIVEL_STYLE: Record<NivelAglomeracion, NivelColor> = {
   alto:             { bg: 'bg-red-100',   text: 'text-red-700',   border: 'border-red-200',   label: 'Alto' },
 };
 
-const SOURCE_INFO: Record<VideoSourceType, { icon: string; title: string; description: string; note?: string }> = {
-  grabacion_previa: {
-    icon: '📁', title: 'Grabación previa',
-    description: 'Usa un video subido anteriormente como fuente de análisis.',
-  },
-  camara_ip: {
-    icon: '📷', title: 'Cámara IP',
-    description: 'Stream en vivo desde una cámara IP registrada con RTSP.',
-  },
-};
+// Esta página solo analiza grabaciones previas. Las cámaras IP en vivo se
+// vigilan en Multi-cámara, donde arrancan solas y se apagan cuando nadie las
+// mira; su resultado pasa al historial automáticamente.
+const TIPO_FUENTE: VideoSourceType = 'grabacion_previa';
 
 type BufferedFrame = { t: number; detecciones: DetectionBox[] };
 
@@ -96,7 +88,6 @@ function drawScene(
 
 export default function MonitoreoPage() {
   // ── Carga de datos ───────────────────────────────────────────────────────
-  const [sourcesData, setSourcesData] = useState<VideoSourcesResponse | null>(null);
   const [recordings, setRecordings] = useState<Recording[]>([]);
   const [zones, setZones] = useState<ExclusionZoneConfig[]>([]);
 
@@ -107,8 +98,7 @@ export default function MonitoreoPage() {
   const recordingFileInputRef = useRef<HTMLInputElement>(null);
 
   // ── Selección ────────────────────────────────────────────────────────────
-  const [selectedType, setSelectedType] = useState<VideoSourceType | null>(null);
-  const [selectedCameraId, setSelectedCameraId] = useState<number | null>(null);
+  const selectedType = TIPO_FUENTE;
   const [selectedRecordingId, setSelectedRecordingId] = useState<number | null>(null);
   const [selectedZoneId, setSelectedZoneId] = useState<number | null>(null);
 
@@ -120,10 +110,6 @@ export default function MonitoreoPage() {
   const sessionRef = useRef<MonitoringSession | null>(null);
   const selectedZoneIdRef = useRef<number | null>(null);
   const currentZoneRectsRef = useRef<ExclusionRect[]>([]);
-
-  // ── Análisis cámara IP (MJPEG + SSE stats) ───────────────────────────────
-  const [cameraStats, setCameraStats] = useState<{ personas: number; nivel: NivelAglomeracion; alerta: boolean } | null>(null);
-  const cameraSseAbortRef = useRef<AbortController | null>(null);
 
   // ── Análisis video (SSE) ─────────────────────────────────────────────────
   const [videoAnalyzing, setVideoAnalyzing] = useState(false);
@@ -150,16 +136,12 @@ export default function MonitoreoPage() {
   const loadData = useCallback(async () => {
     try {
       setLoadingSources(true);
-      // Cada fetch aislado con su propio catch: una falla transitoria en una
-      // (ej. /api/grabaciones) no debe tumbar a las demás (ej. cámaras IP),
-      // o la UI muestra "no hay cámaras" aunque sí existan.
-      const [data, recs, zoneList] = await Promise.all([
-        getVideoSources().catch(() => null),
+      // Cada fetch aislado con su propio catch: si falla la lista de zonas,
+      // igual se pueden ver y analizar las grabaciones.
+      const [recs, zoneList] = await Promise.all([
         getRecordings().catch(() => [] as Recording[]),
         getExclusionZones().catch(() => [] as ExclusionZoneConfig[]),
       ]);
-      if (data) setSourcesData(data);
-      else setError('No se pudieron cargar las fuentes de video. Intenta recargar.');
       setRecordings(recs);
       setZones(zoneList);
     } catch (e) {
@@ -215,54 +197,11 @@ export default function MonitoreoPage() {
   selectedZoneIdRef.current = selectedZoneId;
   currentZoneRectsRef.current = zones.find((z) => z.id === selectedZoneId)?.zonas ?? [];
 
-  // ── SSE de stats de cámara IP ────────────────────────────────────────────
-  function startCameraStatsSse(sesionId: number) {
-    cameraSseAbortRef.current?.abort();
-    const ctrl = new AbortController();
-    cameraSseAbortRef.current = ctrl;
-    const token = localStorage.getItem('token') ?? '';
-
-    (async () => {
-      try {
-        const res = await fetch(
-          `${API_URL}/api/analisis/camara/${sesionId}/stream`,
-          { headers: { Authorization: `Bearer ${token}` }, signal: ctrl.signal },
-        );
-        if (!res.ok || !res.body) return;
-        const reader = res.body.getReader();
-        const dec = new TextDecoder();
-        let buf = '';
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-          buf += dec.decode(value, { stream: true });
-          const lines = buf.split('\n');
-          buf = lines.pop() ?? '';
-          for (const line of lines) {
-            if (!line.startsWith('data:')) continue;
-            try {
-              const ev = JSON.parse(line.slice(5).trim()) as { tipo: string; personas: number; nivel: NivelAglomeracion; alerta: boolean };
-              if (ev.tipo === 'frame') {
-                setCameraStats({ personas: ev.personas, nivel: ev.nivel, alerta: ev.alerta });
-              }
-            } catch { /* ignorar líneas mal formadas */ }
-          }
-        }
-      } catch { /* abortado o desconectado */ }
-    })();
-  }
-
-  function stopCameraSse() {
-    cameraSseAbortRef.current?.abort();
-    cameraSseAbortRef.current = null;
-  }
-
   // ── Cleanup al desmontar ─────────────────────────────────────────────────
   useEffect(() => {
     return () => {
       cancelVideoRef.current?.();
       stopVideoRAF();
-      stopCameraSse();
     };
   }, []);
 
@@ -318,24 +257,14 @@ export default function MonitoreoPage() {
   }
 
   // ── Handlers de flujo ────────────────────────────────────────────────────
-  function handleSelectType(tipo: VideoSourceType) {
-    setSelectedType(tipo);
-    setSelectedCameraId(null);
-    setSelectedRecordingId(null);
-    setStep('select');
-    setError(null);
-  }
-
   async function handleConfirm() {
-    if (!selectedType) return;
-    if (selectedType === 'camara_ip' && !selectedCameraId) { setError('Selecciona una cámara IP.'); return; }
+    if (selectedRecordingId == null) { setError('Selecciona una grabación.'); return; }
     setConfirming(true);
     setError(null);
     try {
       await selectVideoSource({
         tipo: selectedType,
-        ...(selectedCameraId != null ? { camara_id: selectedCameraId } : {}),
-        ...(selectedRecordingId != null ? { grabacion_id: selectedRecordingId } : {}),
+        grabacion_id: selectedRecordingId,
       });
       setStep('confirmed');
     } catch (e) { setError(e instanceof Error ? e.message : 'Error al confirmar fuente.'); }
@@ -343,24 +272,18 @@ export default function MonitoreoPage() {
   }
 
   async function handleStart() {
-    if (!selectedType) return;
     setStarting(true);
     setError(null);
     try {
       const s = await startMonitoring({
         tipo_fuente: selectedType,
-        ...(selectedCameraId != null ? { camara_id: selectedCameraId } : {}),
         ...(selectedRecordingId != null ? { grabacion_id: selectedRecordingId } : {}),
         ...(selectedZoneId != null ? { zona_exclusion_id: selectedZoneId } : {}),
       });
       setSession(s);
       setStep('active');
-      flash('Monitoreo iniciado.');
-
-      if (selectedType === 'camara_ip') {
-        startCameraStatsSse(s.id);
-      }
-    } catch (e) { setError(e instanceof Error ? e.message : 'Error al iniciar monitoreo.'); }
+      flash('Sesión de análisis lista.');
+    } catch (e) { setError(e instanceof Error ? e.message : 'Error al iniciar la sesión.'); }
     finally { setStarting(false); }
   }
 
@@ -370,32 +293,23 @@ export default function MonitoreoPage() {
     setError(null);
     cancelVideoRef.current?.();
     stopVideoRAF();
-    stopCameraSse();
     setVideoAnalyzing(false);
     try {
       const s = await stopMonitoring(session.id);
       setSession(s);
       setStep('stopped');
-      flash('Monitoreo detenido.');
+      flash('Sesión detenida.');
     } catch (e) {
-      // Cámara compartida iniciada por otro usuario: el backend no deja detenerla, solo se sale de la vista.
-      if (e instanceof ApiError && e.status === 403 && session.tipo_fuente === 'camara_ip') {
-        handleReset();
-        flash('Saliste de la vista. Solo quien inició el monitoreo de esta cámara o un administrador puede detenerlo.');
-        return;
-      }
-      setError(e instanceof Error ? e.message : 'Error al detener monitoreo.');
+      setError(e instanceof Error ? e.message : 'Error al detener la sesión.');
     }
     finally { setStopping(false); }
   }
 
   function handleReset() {
-    setSelectedType(null); setSelectedCameraId(null); setSelectedRecordingId(null);
+    setSelectedRecordingId(null);
     setSelectedZoneId(null); setSession(null); setStep('select'); setError(null);
     setVideoProgress(0); setVideoCurrentStats(null); setVideoFin(null);
-    setCameraStats(null);
     videoDetBufferRef.current = [];
-    stopCameraSse();
   }
 
   // ── SSE análisis de video ─────────────────────────────────────────────────
@@ -447,7 +361,6 @@ export default function MonitoreoPage() {
   }
 
   // ── Valores derivados ────────────────────────────────────────────────────
-  const activeCameras = sourcesData?.camaras_ip.filter((c) => c.activa) ?? [];
   const selectedZone = zones.find((z) => z.id === selectedZoneId) ?? null;
 
   // ════════════════════════════════════════════════════════════════════════════
@@ -457,7 +370,10 @@ export default function MonitoreoPage() {
   return (
     <div className="max-w-3xl mx-auto">
       <div className="mb-6">
-        <h1 className="text-2xl font-bold text-[#0F172A]">Monitoreo</h1>
+        <h1 className="text-2xl font-bold text-[#0F172A]">Analizar grabación</h1>
+        <p className="text-slate-500 text-sm mt-1">
+          Analiza un video grabado. Las cámaras en vivo se vigilan en Multi-cámara.
+        </p>
       </div>
 
       {success && <div className="mb-4 px-4 py-3 rounded-lg bg-green-50 border border-green-200 text-sm text-green-700">{success}</div>}
@@ -477,7 +393,7 @@ export default function MonitoreoPage() {
               <p className="font-semibold text-[#0F172A] text-sm">
                 {step === 'active' ? '🟢' : '⚪'} Sesión #{session.id} — {step === 'active' ? 'En curso' : 'Detenida'}
               </p>
-              <p className="text-xs text-slate-500 mt-0.5">{SOURCE_INFO[session.tipo_fuente].title}</p>
+              <p className="text-xs text-slate-500 mt-0.5">Grabación previa</p>
               {selectedZone && <p className="text-xs text-violet-600 mt-0.5 font-medium">Zona: {selectedZone.nombre}</p>}
             </div>
             <div className="flex gap-2">
@@ -624,54 +540,6 @@ export default function MonitoreoPage() {
             </div>
           )}
 
-          {/* ── CÁMARA IP: stream MJPEG en vivo ──────────────────────────── */}
-          {session.tipo_fuente === 'camara_ip' && step === 'active' && (
-            <div className="flex flex-col gap-4">
-              <div className="relative rounded-xl bg-slate-950 border border-slate-700 overflow-hidden aspect-video">
-                <img
-                  src={`${API_URL}/api/analisis/camara/${session.id}/mjpeg?token=${encodeURIComponent(localStorage.getItem('token') ?? '')}`}
-                  alt="Stream cámara IP"
-                  className="w-full h-full object-contain"
-                  onError={() => setError('No se pudo conectar al stream RTSP. Verifica la cámara y las credenciales.')}
-                />
-                <div className="absolute top-2 left-2 px-2 py-1 rounded bg-black/60 text-[10px] font-bold text-red-400 uppercase tracking-wide">
-                  LIVE
-                </div>
-              </div>
-
-              {cameraStats && (() => {
-                const ns = NIVEL_STYLE[cameraStats.nivel];
-                return (
-                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                    <StatCard label="Grupo más grande" value={String(cameraStats.personas)} accent="blue" />
-                    <div className={`rounded-xl px-4 py-3 border ${ns.bg} ${ns.border}`}>
-                      <p className="text-[10px] uppercase tracking-wide opacity-60 mb-0.5">Nivel</p>
-                      <p className={`text-sm font-bold ${ns.text}`}>{ns.label}</p>
-                    </div>
-                    <div className={`rounded-xl px-4 py-3 border ${cameraStats.alerta ? 'bg-red-100 border-red-300' : 'bg-slate-50 border-slate-200'}`}>
-                      <p className="text-[10px] uppercase tracking-wide text-slate-400 mb-0.5">Alerta</p>
-                      <p className={`text-sm font-bold ${cameraStats.alerta ? 'text-red-700' : 'text-slate-400'}`}>
-                        {cameraStats.alerta ? '⚠ ACTIVA' : 'Sin alerta'}
-                      </p>
-                    </div>
-                  </div>
-                );
-              })()}
-
-              <div className="flex flex-wrap gap-4 text-xs text-slate-400">
-                <span className="flex items-center gap-1.5">
-                  <span className="w-3 h-3 rounded-sm border-2 border-cyan-400 inline-block" />
-                  Persona detectada
-                </span>
-                {selectedZone && (
-                  <span className="flex items-center gap-1.5">
-                    <span className="w-3 h-3 rounded-sm border-2 border-dashed border-purple-500 inline-block" />
-                    Zona de exclusión (ignorada)
-                  </span>
-                )}
-              </div>
-            </div>
-          )}
         </div>
       )}
 
@@ -680,51 +548,10 @@ export default function MonitoreoPage() {
         <>
           <div className="bg-white rounded-xl border border-slate-200 shadow-sm mb-4">
             <div className="px-6 py-4 border-b border-slate-100">
-              <h2 className="font-semibold text-[#0F172A] text-base">Seleccionar fuente de video</h2>
+              <h2 className="font-semibold text-[#0F172A] text-base">Seleccionar grabación</h2>
             </div>
             <div className="p-6">
-              {loadingSources ? (
-                <p className="text-slate-400 text-sm text-center py-4">Cargando fuentes…</p>
-              ) : (
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  {(Object.keys(SOURCE_INFO) as VideoSourceType[]).map((tipo) => {
-                    const info = SOURCE_INFO[tipo];
-                    const active = selectedType === tipo;
-                    return (
-                      <button
-                        key={tipo}
-                        onClick={() => handleSelectType(tipo)}
-                        className={`text-left p-4 rounded-xl border-2 transition-all ${
-                          active
-                            ? 'border-[#2563EB] bg-blue-50'
-                            : 'border-slate-200 hover:border-slate-300 bg-white'
-                        }`}
-                      >
-                        <span className="text-2xl mb-2 block" aria-hidden="true">{info.icon}</span>
-                        <p className={`text-sm font-semibold mb-1 ${active ? 'text-[#2563EB]' : 'text-[#0F172A]'}`}>
-                          {info.title}
-                        </p>
-                        <p className="text-xs text-slate-500 leading-relaxed">{info.description}</p>
-                      </button>
-                    );
-                  })}
-                </div>
-              )}
-
-              {selectedType === 'camara_ip' && (
-                <div className="mt-4 pt-4 border-t border-slate-100">
-                  <label className="text-xs font-semibold text-slate-600 uppercase tracking-wide block mb-2">
-                    Cámara activa <span className="text-red-500">*</span>
-                  </label>
-                  {activeCameras.length === 0
-                    ? <p className="text-sm text-slate-400 italic">No hay cámaras activas.</p>
-                    : <select value={selectedCameraId ?? ''} onChange={(e) => setSelectedCameraId(Number(e.target.value) || null)}
-                        className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
-                        <option value="">Selecciona una cámara…</option>
-                        {activeCameras.map((c) => <option key={c.id} value={c.id}>{c.nombre} — {c.ubicacion}</option>)}
-                      </select>}
-                </div>
-              )}
+              {loadingSources && <p className="text-slate-400 text-sm text-center py-4">Cargando grabaciones…</p>}
 
               {selectedType === 'grabacion_previa' && (
                 <div className="mt-4 pt-4 border-t border-slate-100">
@@ -784,7 +611,7 @@ export default function MonitoreoPage() {
               )}
             </div>
 
-            {selectedType && (
+            {!loadingSources && (
               <div className="px-6 py-4 border-t border-slate-100">
                 <button onClick={handleConfirm} disabled={confirming}
                   className="px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-900 text-white text-sm font-semibold transition-colors disabled:opacity-60">
@@ -842,13 +669,13 @@ export default function MonitoreoPage() {
               <div className="px-6 py-4 bg-slate-50 flex items-center justify-between gap-4 flex-wrap">
                 <div>
                   <p className="font-semibold text-[#0F172A] text-sm">
-                    Fuente: {selectedType ? SOURCE_INFO[selectedType].title : ''}
+                    Fuente: Grabación previa
                   </p>
                   <p className="text-xs text-slate-500 mt-0.5">Presiona "Iniciar" para registrar la sesión.</p>
                 </div>
                 <button onClick={handleStart} disabled={starting}
                   className="shrink-0 px-5 py-2.5 rounded-lg bg-[#2563EB] hover:bg-blue-700 text-white text-sm font-semibold transition-colors disabled:opacity-60">
-                  {starting ? 'Iniciando…' : '▶ Iniciar monitoreo'}
+                  {starting ? 'Preparando…' : 'Continuar'}
                 </button>
               </div>
             </div>

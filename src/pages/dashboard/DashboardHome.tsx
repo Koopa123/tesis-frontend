@@ -15,17 +15,17 @@ interface QuickLink {
 
 const OPERACION_LINKS: QuickLink[] = [
   {
-    to: '/dashboard/monitoreo',
-    icon: '▶',
-    title: 'Monitoreo',
-    description: 'Selecciona una fuente de video, inicia y detén sesiones de monitoreo.',
-    accent: 'border-blue-200 hover:border-blue-400 hover:shadow-blue-50',
-  },
-  {
     to: '/dashboard/multicamara',
     icon: '⊞',
     title: 'Multi-cámara',
-    description: 'Supervisa varias cámaras IP a la vez desde una sola vista.',
+    description: 'Vigila todas las cámaras IP en vivo; arranca sola al entrar.',
+    accent: 'border-blue-200 hover:border-blue-400 hover:shadow-blue-50',
+  },
+  {
+    to: '/dashboard/monitoreo',
+    icon: '▶',
+    title: 'Analizar grabación',
+    description: 'Sube un video grabado y analiza las aglomeraciones que tuvo.',
     accent: 'border-blue-200 hover:border-blue-400 hover:shadow-blue-50',
   },
   {
