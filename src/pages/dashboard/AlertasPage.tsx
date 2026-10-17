@@ -165,7 +165,10 @@ function AlertRow({
         <div className="flex gap-4 text-xs text-slate-400 flex-wrap">
           <span>Detectada: {formatDate(alerta.fecha_alerta)}</span>
           {alerta.atendida && alerta.fecha_atencion && (
-            <span>Atendida: {formatDate(alerta.fecha_atencion)}</span>
+            <span>
+              Atendida: {formatDate(alerta.fecha_atencion)}
+              {alerta.atendida_por_nombre && ` por ${alerta.atendida_por_nombre}`}
+            </span>
           )}
           {alerta.clip_evidencia && (
             <button
