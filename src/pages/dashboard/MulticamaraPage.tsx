@@ -48,7 +48,7 @@ export default function MulticamaraPage() {
   }
 
   return (
-    <div className="max-w-7xl mx-auto">
+    <div className="w-full">
       <div className="mb-6">
         <h1 className="text-2xl font-bold text-[#0F172A]">Vista multi-cámara</h1>
         <p className="text-slate-500 text-sm mt-1">Monitoreo simultáneo de cámaras IP en vivo</p>
@@ -92,7 +92,7 @@ export default function MulticamaraPage() {
               <p className="text-slate-400 text-sm">Todas las cámaras están ocultas.</p>
             </div>
           ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 lg:grid-cols-2 2xl:grid-cols-3 gap-4">
               {visibleCameras.map((c) => (
                 <CameraTile key={c.id} camera={c} onHide={() => hideCamera(c.id)} />
               ))}
@@ -116,6 +116,12 @@ function CameraTile({ camera, onHide }: { camera: CameraIP; onHide: () => void }
   const countdownTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const sseAbortRef = useRef<AbortController | null>(null);
   const mountedRef = useRef(true);
+  const videoRef = useRef<HTMLDivElement | null>(null);
+
+  const verPantallaCompleta = useCallback(() => {
+    if (document.fullscreenElement) void document.exitFullscreen();
+    else void videoRef.current?.requestFullscreen();
+  }, []);
 
   const clearTimers = useCallback(() => {
     if (retryTimerRef.current) { clearTimeout(retryTimerRef.current); retryTimerRef.current = null; }
@@ -275,6 +281,13 @@ function CameraTile({ camera, onHide }: { camera: CameraIP; onHide: () => void }
         <div className="flex items-center gap-2 shrink-0">
           <StatusPill status={status} />
           <button
+            onClick={verPantallaCompleta}
+            title="Ver en pantalla completa (también con doble clic sobre el video)"
+            className="text-slate-400 hover:text-white text-xs px-2 py-1 rounded hover:bg-slate-700 transition-colors"
+          >
+            ⛶
+          </button>
+          <button
             onClick={onHide}
             title="Ocultar cámara"
             className="text-slate-400 hover:text-white text-xs px-2 py-1 rounded hover:bg-slate-700 transition-colors"
@@ -284,7 +297,7 @@ function CameraTile({ camera, onHide }: { camera: CameraIP; onHide: () => void }
         </div>
       </div>
 
-      <div className="relative aspect-video bg-black">
+      <div ref={videoRef} onDoubleClick={verPantallaCompleta} className="relative aspect-video bg-black">
         {showImg && (
           <img
             key={retryKey}
