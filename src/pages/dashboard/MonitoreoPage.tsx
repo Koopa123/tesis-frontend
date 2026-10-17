@@ -671,7 +671,7 @@ export default function MonitoreoPage() {
                   <p className="font-semibold text-[#0F172A] text-sm">
                     Fuente: Grabación previa
                   </p>
-                  <p className="text-xs text-slate-500 mt-0.5">Presiona "Iniciar" para registrar la sesión.</p>
+                  <p className="text-xs text-slate-500 mt-0.5">Presiona "Continuar" para preparar el análisis.</p>
                 </div>
                 <button onClick={handleStart} disabled={starting}
                   className="shrink-0 px-5 py-2.5 rounded-lg bg-[#2563EB] hover:bg-blue-700 text-white text-sm font-semibold transition-colors disabled:opacity-60">
