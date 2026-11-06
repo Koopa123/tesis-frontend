@@ -28,6 +28,11 @@ const ACCIONES: Record<string, string> = {
   eliminar_resultado: 'Eliminó un resultado del historial',
   atender_alerta: 'Atendió una alerta',
   borrado_automatico: 'Borrado automático de evidencias',
+  respaldo_bd: 'Respaldo diario de la base de datos',
+  sistema_iniciado: 'Se inició el sistema',
+  sistema_detenido: 'Se detuvo el sistema',
+  camara_sin_senal: 'Cámara sin señal',
+  camara_reconectada: 'Cámara reconectada',
 };
 
 // Acciones sobre imágenes de personas: se resaltan porque son las que importan para detectar una fuga.
