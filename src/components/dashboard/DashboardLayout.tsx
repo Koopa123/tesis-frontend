@@ -3,6 +3,7 @@ import { Link, NavLink, Outlet, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { useAlerts } from '../../context/AlertContext';
 import AlertToast from '../alerts/AlertToast';
+import AvisoFueraDeHorario from './AvisoFueraDeHorario';
 
 interface NavItem {
   to: string;
@@ -175,6 +176,7 @@ export default function DashboardLayout() {
           </span>
         </header>
 
+        <AvisoFueraDeHorario />
         <main className="flex-1 p-4 sm:p-6 lg:p-8">
           <Outlet />
         </main>
